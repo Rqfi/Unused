@@ -1,0 +1,67 @@
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.widget.Toast
+import androidx.lifecycle.MutableLiveData
+import com.example.projectapp.data.remote.ApiService
+import com.example.projectapp.data.remote.data.login.Login
+import com.example.projectapp.data.remote.data.login.LoginResponses
+import com.example.projectapp.di.IoDispatcher
+import com.example.projectapp.ui.MainActivity
+import com.example.projectapp.ui.login.LoginViewModel
+import com.google.gson.Gson
+import com.google.gson.JsonObject
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import javax.inject.Inject
+
+class LoginRepository @Inject constructor(
+    private val apiService: ApiService,
+    private val loginViewModel: LoginViewModel,
+    @IoDispatcher private val ioDispatcher: CoroutineDispatcher
+) {
+
+    private val error = MutableLiveData<String>()
+    private val loading = MutableLiveData<Boolean>()
+
+    private val loginForm = MutableLiveData<Login>()
+    suspend fun getLogin(context: Context, email: String, password: String) : GetLoginResult {
+        return withContext(ioDispatcher) {
+            loading.postValue(true)
+            try {
+                val requestBody = createLoginRequestBody(email, password)
+                val getLoginResponse = apiService.getLogin(requestBody)
+
+                if (getLoginResponse.isSuccessful) {
+                    val responseBody = getLoginResponse.body()
+
+                    if (responseBody != null && responseBody is JsonObject) {
+                        val gson = Gson()
+                        val loginResponses = gson.fromJson(responseBody, LoginResponses::class.java)
+                        loginViewModel.handleSuccessfulLogin(loginResponses, context)
+                    }
+                } else {
+                    error.postValue(getLoginResponse.errorBody()?.string().toString())
+                }
+                loading.postValue(false)
+            } catch (e: Exception) {
+                loading.postValue(false)
+                e.printStackTrace()
+                error.postValue(e.localizedMessage)
+            }
+            return@withContext GetLoginResult(error, loading, loginForm)
+        }
+    }
+
+    private fun createLoginRequestBody(email: String, password: String) : RequestBody {
+        val json = JsonObject().apply {
+            addProperty("email", email)
+            addProperty("password", password)
+        }
+        val mediaType = "application/json; charset=utf-8".toMediaType()
+        return json.toString().toRequestBody(mediaType)
+    }
+}

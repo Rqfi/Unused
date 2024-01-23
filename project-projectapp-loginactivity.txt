@@ -1,0 +1,74 @@
+import android.content.Context
+import androidx.appcompat.app.AppCompatActivity
+import android.os.Bundle
+import android.view.View
+import android.widget.Toast
+import androidx.activity.viewModels
+import com.example.projectapp.data.remote.data.login.LoginEvent
+import com.example.projectapp.databinding.ActivityLoginBinding
+import com.example.projectapp.util.showError
+import com.example.projectapp.util.showLoading
+import dagger.hilt.android.AndroidEntryPoint
+import org.greenrobot.eventbus.EventBus
+import org.greenrobot.eventbus.Subscribe
+
+@AndroidEntryPoint
+class LoginActivity : AppCompatActivity() {
+
+    private lateinit var binding: ActivityLoginBinding
+    private val loginViewModel: LoginViewModel by viewModels()
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        binding = ActivityLoginBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        try {
+            initUi()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun initUi() {
+        binding.btnLogin.setOnClickListener {
+            val email = binding.etEmail.text.toString()
+            val password = binding.etPassword.text.toString()
+
+            initObservers()
+            if (email.isNotEmpty() && password.isNotEmpty()) {
+                loginViewModel.login(this, email, password)
+            } else {
+                showError(this, "Email dan password harus diisi")
+            }
+
+        }
+    }
+
+    private fun initObservers() {
+        loginViewModel.getLoginError.observe(this){
+            showError(this, it)
+        }
+        loginViewModel.getLoginLoading.observe(this) {
+            showLoading(this, binding.progressbarLogin, it)
+        }
+        loginViewModel.loginForm.observe(this) {
+            binding.formLogin.visibility = View.VISIBLE
+        }
+    }
+
+    @Subscribe
+    fun onLoginEvent(event: LoginEvent) {
+        Toast.makeText(this, "Login berhasil!", Toast.LENGTH_SHORT).show()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        EventBus.getDefault().register(this)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        EventBus.getDefault().unregister(this)
+    }
+}
